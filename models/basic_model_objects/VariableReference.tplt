@@ -1,0 +1,95 @@
+//
+// Created by simon on 14/06/2021.
+//
+
+#include "VariableReference.h"
+
+namespace robust_model {
+
+template<class V>
+VariableReference<V>::VariableReference(typename V::Index id): _id(id) {}
+
+template<class V>
+VariableReference<V>::VariableReference(V const& var) : VariableReference(var.id()) {}
+
+template<class V>
+ScaledVariable <typename V::Reference> VariableReference<V>::operator-() const {
+    return ScaledVariable<typename V::Reference>(-1, *this);
+}
+
+template<class V>
+ScaledVariable <typename V::Reference> VariableReference<V>::operator*(double s) const {
+    return ScaledVariable<typename V::Reference>(s, *this);
+}
+
+template<class V>
+ScaledVariable <typename V::Reference> VariableReference<V>::operator/(double s) const {
+    return ScaledVariable<typename V::Reference>(1. / s, *this);
+}
+
+
+template<class V>
+template<LinearAddable <typename V::Reference> T>
+LinearExpression <typename V::Reference> VariableReference<V>::operator+(T const& other) const {
+    return LinearExpression<typename V::Reference>(*this) += other;
+}
+
+template<class V>
+template<SolelyAffineAddable <typename V::Reference> T>
+AffineExpression <typename V::Reference> VariableReference<V>::operator+(T const& other) const {
+    return AffineExpression<typename V::Reference>(*this) += other;
+}
+
+template<class V>
+template<LinearSubtractable <typename V::Reference> T>
+LinearExpression <typename V::Reference> VariableReference<V>::operator-(T const& other) const {
+    return LinearExpression<typename V::Reference>(*this) -= other;
+}
+
+template<class V>
+template<SolelyAffineSubtractable <typename V::Reference> T>
+AffineExpression <typename V::Reference> VariableReference<V>::operator-(T const& other) const {
+    return AffineExpression<typename V::Reference>(*this) -= other;
+}
+
+template<class V>
+template<AffineSubtractable <typename V::Reference> T>
+RawConstraint <AffineExpression<typename V::Reference>> VariableReference<V>::operator>=(T const& other) const {
+    return AffineExpression<typename V::Reference>(*this) >= other;
+}
+
+template<class V>
+template<AffineSubtractable <typename V::Reference> T>
+RawConstraint <AffineExpression<typename V::Reference>> VariableReference<V>::operator<=(T const& other) const {
+    return AffineExpression<typename V::Reference>(*this) <= other;
+}
+
+template<class V>
+template<AffineSubtractable <typename V::Reference> T>
+RawConstraint <AffineExpression<typename V::Reference>> VariableReference<V>::operator==(T const& other) const {
+    return AffineExpression<typename V::Reference>(*this) == other;
+}
+
+template<class V>
+std::string VariableReference<V>::to_string() const{
+    return (*this)->name();
+}
+
+template<class V>
+template<SolutionProvider<typename V::Index> S>
+double VariableReference<V>::value(S const& solution) const{
+    return solution.value((*this)->id());
+}
+
+template<class V>
+double VariableReference<V>::lb() const {
+    return (*this)->lb();
+}
+
+template<class V>
+double VariableReference<V>::ub() const {
+    return (*this)->ub();
+}
+
+}
+

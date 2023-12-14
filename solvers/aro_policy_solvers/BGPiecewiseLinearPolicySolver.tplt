@@ -1,0 +1,138 @@
+//
+// Created by thomae on 28/06/2023.
+//
+
+#include "BGPiecewiseLinearPolicySolver.h"
+
+namespace robust_model {
+
+template<>
+struct BGPiecewiseLinearPolicySolver::ProblemTypeDecisionMap<BGPiecewiseLinearPolicySolver::ProblemType::MASTER> {
+    using Type = SOCVariable::Reference;
+};
+
+template<>
+struct BGPiecewiseLinearPolicySolver::ProblemTypeDecisionMap<BGPiecewiseLinearPolicySolver::ProblemType::SUBPROBLEM> {
+    using Type = double;
+};
+
+template<>
+struct BGPiecewiseLinearPolicySolver::ProblemTypeUncertaintyMap<BGPiecewiseLinearPolicySolver::ProblemType::MASTER> {
+    using Type = double;
+};
+
+template<>
+struct BGPiecewiseLinearPolicySolver::ProblemTypeUncertaintyMap<BGPiecewiseLinearPolicySolver::ProblemType::SUBPROBLEM> {
+    using Type = SOCVariable::Reference;
+};
+
+
+template<>
+inline
+SOCModel& BGPiecewiseLinearPolicySolver::soc_model<BGPiecewiseLinearPolicySolver::ProblemType::MASTER>() {
+    return _solver_model;
+}
+
+template<>
+inline
+SOCModel& BGPiecewiseLinearPolicySolver::soc_model<BGPiecewiseLinearPolicySolver::ProblemType::SUBPROBLEM>() {
+    return *_submodel;
+}
+
+template<>
+inline
+typename BGPiecewiseLinearPolicySolver::ProblemTypeDecisionMap<BGPiecewiseLinearPolicySolver::ProblemType::MASTER>::Type
+BGPiecewiseLinearPolicySolver::piecewise_variable<BGPiecewiseLinearPolicySolver::ProblemType::MASTER>(
+        DecisionVariable::Index const& dvar, size_t piece,
+        size_t const dependency_pos,
+        BGPiecewiseLinearPolicySolver::PiecewisePart const part) const {
+    switch (part) {
+        case PiecewisePart::UPPER:
+            return _upper_variables.at(dvar.raw_id()).at(piece).at(dependency_pos);
+        case PiecewisePart::LOWER:
+            return _lower_variables.at(dvar.raw_id()).at(piece).at(dependency_pos);
+
+    }
+}
+
+template<>
+inline
+typename BGPiecewiseLinearPolicySolver::ProblemTypeDecisionMap<BGPiecewiseLinearPolicySolver::ProblemType::SUBPROBLEM>::Type
+BGPiecewiseLinearPolicySolver::piecewise_variable<BGPiecewiseLinearPolicySolver::ProblemType::SUBPROBLEM>(
+        DecisionVariable::Index const& dvar, size_t piece,
+        size_t const dependency_pos,
+        BGPiecewiseLinearPolicySolver::PiecewisePart const part) const {
+    return piecewise_variable<ProblemType::MASTER>(dvar, piece, dependency_pos, part)->solution();
+}
+
+template<>
+inline
+typename BGPiecewiseLinearPolicySolver::ProblemTypeDecisionMap<BGPiecewiseLinearPolicySolver::ProblemType::MASTER>::Type
+BGPiecewiseLinearPolicySolver::piecewise_constant<BGPiecewiseLinearPolicySolver::ProblemType::MASTER>(
+        DecisionVariable::Index const& dvar, size_t const piece,
+        BGPiecewiseLinearPolicySolver::PiecewisePart part) const {
+    switch (part) {
+        case PiecewisePart::UPPER:
+            return _upper_variables_constant.at(dvar.raw_id()).at(piece);
+        case PiecewisePart::LOWER:
+            return _lower_variables_constant.at(dvar.raw_id()).at(piece);
+    }
+}
+
+template<>
+inline
+typename BGPiecewiseLinearPolicySolver::ProblemTypeDecisionMap<BGPiecewiseLinearPolicySolver::ProblemType::SUBPROBLEM>::Type
+BGPiecewiseLinearPolicySolver::piecewise_constant<BGPiecewiseLinearPolicySolver::ProblemType::SUBPROBLEM>(
+        DecisionVariable::Index const& dvar, size_t const piece,
+        BGPiecewiseLinearPolicySolver::PiecewisePart part) const {
+    return piecewise_constant<ProblemType::MASTER>(dvar, piece, part)->solution();
+}
+
+template<BGPiecewiseLinearPolicySolver::ProblemType T>
+SOCVariable::Reference
+BGPiecewiseLinearPolicySolver::add_maximum_variable_with_constraints(
+        DecisionVariable::Index const& dvar,
+        std::vector<typename ProblemTypeUncertaintyMap<T>::Type> const& uncertainty_realization,
+        BGPiecewiseLinearPolicySolver::PiecewisePart const part,
+        std::string const& var_name_addendum
+        ) {
+    auto const bounding_var = soc_model<T>().add_variable(dvar->name() + "Bound_" + to_string(part) + "_" + var_name_addendum);
+    LinearExpression<SOCVariable::Reference> indicator_sum;
+    for (size_t piece = 0; piece < _num_pieces; ++piece) {
+        AffineExpression<SOCVariable::Reference> affine_expression;
+        affine_expression += piecewise_constant<T>(dvar, piece, part);
+        for (size_t dependency_pos = 0; dependency_pos < dvar->dependencies().size(); ++dependency_pos) {
+            auto const& uvar = dvar->dependencies().at(dependency_pos);
+            affine_expression +=
+                    piecewise_variable<T>(dvar, piece, dependency_pos, part) *
+                    uncertainty_realization.at(uvar.raw_id());
+        }
+        soc_model<T>().add_constraint(bounding_var >= affine_expression, dvar->name() + "BoundingConstrL");
+        auto const slack = soc_model<T>().add_variable(dvar->name() + "Slack_" + to_string(part) + "_" + std::to_string(piece) + "_" + var_name_addendum, 0, NO_VARIABLE_UB);
+        soc_model<T>().add_constraint(bounding_var <= affine_expression + slack, dvar->name() + "BoundingConstrU");
+        auto const indicator = soc_model<T>().add_variable(dvar->name() + "Indicator_" + to_string(part) + "_" + std::to_string(piece) + "_" + var_name_addendum, 0, 1,
+                                                           VariableType::Binary);
+        soc_model<T>().add_sos_constraint({slack, indicator});
+        indicator_sum += indicator;
+    }
+    soc_model<T>().add_constraint(indicator_sum == 1, dvar->name() + "IndicatorSum");
+    return bounding_var;
+}
+
+template<BGPiecewiseLinearPolicySolver::ProblemType T>
+std::vector<SOCVariable::Reference>
+BGPiecewiseLinearPolicySolver::add_piecewise_function_encoding(
+        std::vector<typename ProblemTypeUncertaintyMap<T>::Type> const& uncertainty) {
+    std::vector<SOCVariable::Reference> scenario_vars;
+    for (auto const& dvar: model().decision_variable_ids()) {
+        scenario_vars.emplace_back(soc_model<T>().add_variable(dvar->name() + "Svar", dvar->lb(), dvar->ub()));
+        auto const var_up = add_maximum_variable_with_constraints<T>(dvar, uncertainty,
+                                                                     PiecewisePart::UPPER);
+        auto const var_low = add_maximum_variable_with_constraints<T>(dvar, uncertainty,
+                                                                      PiecewisePart::LOWER);
+        soc_model<T>().add_constraint(scenario_vars.back() == var_up - var_low, dvar->name() + "ScenarioFixer");
+    }
+    return scenario_vars;
+}
+
+}

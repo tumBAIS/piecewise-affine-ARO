@@ -1,0 +1,58 @@
+//
+// Created by simon on 14/06/2021.
+//
+
+#include "RawConstraint.h"
+
+namespace robust_model{
+
+template<class E>
+RawConstraint<E>::RawConstraint(ConstraintSense
+                                              sense, E const& expression) :
+        _sense(sense),
+        _expression(expression) {}
+
+template<class E>
+template<ConvertibleTo <E> T>
+RawConstraint<E>::RawConstraint(ConstraintSense
+                                              sense, T const& expression) :
+        RawConstraint(sense,
+                      E(expression)) {}
+
+template<class E>
+template<ConvertibleTo <E> T>
+RawConstraint<E>::RawConstraint(RawConstraint <T> const& raw_constraint) :
+        RawConstraint(raw_constraint.sense(),
+                      raw_constraint.expression()) {}
+
+template<class E>
+std::string RawConstraint<E>::to_string() const {
+    return _expression.to_string() + " " + sense_string(_sense) + " 0";
+}
+
+template<class E>
+ConstraintSense RawConstraint<E>::sense() const {
+    return _sense;
+}
+
+template<class E>
+E const& RawConstraint<E>::expression() const {
+    return _expression;
+}
+
+template<class E>
+template<class S>
+bool RawConstraint<E>::feasible(S const& solution, double tolerance) const {
+    double lhs = expression().value(solution);
+    switch (sense()) {
+        case ConstraintSense::EQ:
+            return (lhs <= tolerance) and (lhs >= -tolerance);
+        case ConstraintSense::LEQ:
+            return lhs <= tolerance;
+        case ConstraintSense::GEQ:
+            return lhs >= -tolerance;
+    }
+}
+
+
+}

@@ -1,0 +1,50 @@
+//
+// Created by simon on 14/06/2021.
+//
+
+#include "ObjectiveBase.h"
+
+
+namespace robust_model {
+
+
+template<class E>
+ObjectiveBase<E>::ObjectiveBase(Sense sense, E const& expression) : _sense(sense), _expression(expression), _value(){}
+
+template<class E>
+std::string ObjectiveBase<E>::to_string() const {
+    return sense_string(sense()) + " " + expression().to_string();
+}
+
+template<class E>
+typename ObjectiveBase<E>::Sense ObjectiveBase<E>::sense() const {
+    return _sense;
+}
+
+template<class E>
+E const& ObjectiveBase<E>::expression() const {
+    return _expression;
+}
+
+template<class E>
+double ObjectiveBase<E>::value() const {
+    return _value.value();
+}
+
+template<class E>
+template<class S>
+double ObjectiveBase<E>::value(S const& s) const {
+    return expression().value(s);
+}
+
+template<class E>
+void ObjectiveBase<E>::set_solution(double solution) {
+    _value=solution;
+}
+
+template<class E>
+void ObjectiveBase<E>::invalidate_solution() {
+    _value = {};
+}
+
+}

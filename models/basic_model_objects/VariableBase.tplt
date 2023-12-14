@@ -1,0 +1,42 @@
+//
+// Created by simon on 14/06/2021.
+//
+
+#include "VariableBase.h"
+
+
+namespace robust_model{
+
+template<class V>
+VariableBase<V>::VariableBase(Index id, std::string name, const double lb, const double ub) :
+        helpers::IndexedObject<V>(id),
+        _name(std::move(name)),
+        _lb(lb),
+        _ub(ub) {}
+
+template<class V>
+typename VariableBase<V>::Reference VariableBase<V>::reference() const {
+    return VariableBase<V>::Reference(helpers::IndexedObject<V>::id());
+}
+
+template<class V>
+std::string const& VariableBase<V>::name() const {
+    return _name;
+}
+
+template<class V>
+double VariableBase<V>::lb() const {
+    return _lb;
+}
+
+template<class V>
+double VariableBase<V>::ub() const {
+    return _ub;
+}
+
+template<class V>
+bool VariableBase<V>::bounded() const {
+    return (lb() > NO_VARIABLE_LB) and (ub() < NO_VARIABLE_UB);
+}
+
+}

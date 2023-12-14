@@ -1,0 +1,90 @@
+//
+// Created by simon on 11.05.21.
+//
+
+#include "SOCConstraint.h"
+
+namespace robust_model {
+
+template<class V>
+SOCConstraint<V>::SOCConstraint(RawConstraint const& raw_constraint, std::string const& name) :
+        BaseConstraint(raw_constraint, name) {
+    helpers::exception_check(raw_constraint.expression().is_affine() or
+                             raw_constraint.sense() == ConstraintSense::LEQ,
+                             "Real SOC constraints have to be <=!");
+}
+
+
+
+template<class V>
+template<ConvertibleTo<SOCExpression < V>> E>
+SOCConstraint<V>::SOCConstraint(ConstraintSense sense, E const& expression, std::string const& name)  :
+        SOCConstraint(RawConstraint(sense, expression), name) {}
+
+template<class V>
+template<ConvertibleTo<typename SOCConstraint<V>::RawConstraint> RC>
+SOCConstraint<V>::SOCConstraint(RC const& raw_constraint, std::string const& name)  :
+        SOCConstraint(RawConstraint(raw_constraint), name) {}
+
+template<class V>
+template<class W>
+SOCConstraint<W> SOCConstraint<V>::translate_to_other(std::vector<VariableReference<W> >const& new_vars) const {
+    return SOCConstraint<W>(SOCConstraint<V>::sense(), soc_expression().translate_to_other(new_vars), SOCConstraint<V>::name());
+}
+
+template<class V>
+template<class W, AffineAddable<typename W::Reference> T>
+SOCConstraint<W> SOCConstraint<V>::substitute(std::vector<T> const& substitutions) const {
+    return SOCConstraint<W>(SOCConstraint<V>::sense(), soc_expression().template substitute<W>(substitutions), SOCConstraint<V>::name());
+}
+
+template<class V>
+SOCExpression<V> const& SOCConstraint<V>::soc_expression() const {
+    return Constraint<SOCExpression<V>>::expression();
+}
+
+template<class V>
+bool SOCConstraint<V>::is_variable_bound() const {
+    return soc_expression().is_single_unscaled_variable();
+}
+
+template<class V>
+bool SOCConstraint<V>::has_dual_value() const {
+    return _dual_value.has_value();
+}
+
+template<class V>
+double SOCConstraint<V>::dual_value() const {
+    return _dual_value.value();
+}
+
+template<class V>
+void SOCConstraint<V>::set_dual_value(double const value) {
+    _dual_value = value;
+}
+
+template<class V>
+void SOCConstraint<V>::invalidate_dual_value() {
+    _dual_value = {};
+}
+
+template<class V>
+template<class S>
+bool robust_model::SOCConstraint<V>::constraint_satisfied(S const& realization) const {
+    double val = soc_expression().value(realization);
+    switch (Constraint<SOCExpression<V>>::sense()) {
+        case ConstraintSense::EQ:{
+            return val==0;
+        }
+        case ConstraintSense::LEQ:{
+            return val<=0;
+        }
+        case ConstraintSense::GEQ:{
+            return val>=0;
+        }
+    }
+    helpers::exception_check(false, "Forbidden Case!");
+    return false;
+}
+
+}

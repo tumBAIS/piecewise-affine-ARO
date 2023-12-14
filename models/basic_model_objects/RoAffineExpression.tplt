@@ -1,0 +1,264 @@
+//
+// Created by simon on 14/06/2021.
+//
+
+#include "RoAffineExpression.h"
+
+namespace robust_model {
+
+template<ConvertibleTo<LinearExpression<DecisionVariable::Reference>> T>
+RoAffineExpression::RoAffineExpression(T const& t) : _decisions(t) {}
+
+template<ConvertibleTo<LinearExpression<UncertaintyVariable::Reference>> T>
+RoAffineExpression::RoAffineExpression(T const& t) : _uncertainties(t) {}
+
+template<ConvertibleTo<LinearExpression<UncertaintyScaledDecision>> T>
+RoAffineExpression::RoAffineExpression(T const& t) :_uncertainty_decisions(t) {}
+
+template<LinearAddable<UncertaintyVariable::Reference> T>
+RoAffineExpression& RoAffineExpression::operator+=(T const& expr) {
+    _uncertainties += expr;
+    return *this;
+}
+
+template<LinearAddable<DecisionVariable::Reference> T>
+RoAffineExpression& RoAffineExpression::operator+=(T const& expr) {
+    _decisions += expr;
+    return *this;
+}
+
+template<LinearAddable<UncertaintyScaledDecision> T>
+RoAffineExpression& RoAffineExpression::operator+=(T const& expr) {
+    _uncertainty_decisions += expr;
+    return *this;
+}
+
+template<RobustVariableType V>
+RoAffineExpression& RoAffineExpression::operator+=(AffineExpression<VariableReference<V>> const& expr) {
+    *this += expr.constant();
+    return *this += expr.linear();
+}
+
+template<RoSubtractable T>
+RoAffineExpression& RoAffineExpression::operator-=(T const& t) {
+    return *this += -t;
+}
+
+template<RoAddable T>
+RoAffineExpression RoAffineExpression::operator+(T const& t) const {
+    return RoAffineExpression(*this) += t;
+}
+
+template<RoSubtractable T>
+RoAffineExpression RoAffineExpression::operator-(T const& t) const {
+    return RoAffineExpression(*this) -= t;
+}
+
+template<RoSubtractable T>
+RawConstraint<RoAffineExpression> RoAffineExpression::operator>=(T const& other) const {
+    return {ConstraintSense::GEQ,
+            *this - other};
+}
+
+template<RoSubtractable T>
+RawConstraint<RoAffineExpression> RoAffineExpression::operator<=(T const& other) const {
+    return {ConstraintSense::LEQ,
+            *this - other};
+}
+
+template<RoSubtractable T>
+RawConstraint<RoAffineExpression> RoAffineExpression::operator==(T const& other) const {
+    return {ConstraintSense::EQ,
+            *this - other};
+}
+
+template<AffineAddable<typename DecisionVariable::Reference> TD, AffineAddable<typename UncertaintyVariable::Reference> TU>
+RoAffineExpression RoAffineExpression::substitute(std::vector<TD> const& decision_substitutions,
+                                                  std::vector<TU> const& uncertainty_substitutions) const {
+//    helpers::exception_check(uncertainty_decisions().empty(),
+//                             "Substituting variables not implemented for uncertainty scaled decisions yet!");
+
+    AffineExpression<typename DecisionVariable::Reference> const substituted_decisions =
+            decisions().template substitute<typename DecisionVariable::Reference>(decision_substitutions);
+    AffineExpression<typename UncertaintyVariable::Reference> const substituted_uncertainties =
+            uncertainties().template substitute<typename UncertaintyVariable::Reference>(uncertainty_substitutions);
+    RoAffineExpression expr {constant() + substituted_decisions.constant() + substituted_uncertainties.constant(),
+            substituted_decisions.linear(),
+            substituted_uncertainties.linear()};
+    for(auto const& sudvar : uncertainty_decisions().scaled_variables()){
+        expr += sudvar.scale() *
+                decision_substitutions.at(sudvar.variable().decision_variable().raw_id()) *
+                uncertainty_substitutions.at(sudvar.variable().uncertainty_variable().raw_id());
+    }
+    expr.set_multi_uncertainty_behaviour(multi_uncertainty_behaviour());
+    return expr;
+}
+
+template<class W, AffineAddable<W> TD, AffineAddable<W> TU>
+AffineExpression<W>
+RoAffineExpression::substitute_to_other_affine_no_uncertain_decisions(std::vector<TD> const& decision_substitutions,
+                                                                      std::vector<TU> const& uncertainty_substitutions) const {
+    AffineExpression<W> expr(_constant);
+    expr += decisions().template substitute<W>(decision_substitutions);
+    expr += uncertainties().template substitute<W>(uncertainty_substitutions);
+    return expr;
+}
+
+template<class W, AffineAddable<W> TD, AffineAddable<W> TU>
+AffineExpression<W> RoAffineExpression::substitute_to_other_affine(std::vector<TD> const& decision_substitutions,
+                                                                   std::vector<TU> const& uncertainty_substitutions) const {
+    auto expr = substitute_to_other_affine_no_uncertain_decisions<W>(decision_substitutions, uncertainty_substitutions);
+
+    for(auto const& sudvar : uncertainty_decisions().scaled_variables()){
+        expr += sudvar.scale() *
+                decision_substitutions.at(sudvar.variable().decision_variable().raw_id()) *
+                uncertainty_substitutions.at(sudvar.variable().uncertainty_variable().raw_id());
+    }
+    return expr;
+}
+
+//*
+// -----------------------------------------------
+// friend functions generating RoAffineExpressions
+// -----------------------------------------------
+// *//
+
+
+template<RobustVariableType V1, NonConstAffineConvertible<typename OtherRobustVariableType<V1>::Type::Reference> T>
+RoAffineExpression operator+(VariableReference<V1> const& v, T const& t) {
+    return RoAffineExpression(v) += t;
+}
+
+template<RobustVariableType V1, NonConstAffineConvertible<typename OtherRobustVariableType<V1>::Type::Reference> T>
+RoAffineExpression operator+(ScaledVariable<VariableReference<V1> >
+                             const& v, T const& t) {
+    return RoAffineExpression(v) += t;
+}
+
+template<RobustVariableType V1, NonConstAffineConvertible<typename OtherRobustVariableType<V1>::Type::Reference> T>
+RoAffineExpression operator+(LinearExpression<VariableReference<V1> >
+                             const& v, T const& t) {
+    return RoAffineExpression(v) += t;
+}
+
+template<RobustVariableType V1, NonConstAffineConvertible<typename OtherRobustVariableType<V1>::Type::Reference> T>
+RoAffineExpression operator+(AffineExpression<V1> const& v, T const& t) {
+    return RoAffineExpression(v) += t;
+}
+
+template<RobustVariableType V1, NonConstAffineConvertible<typename OtherRobustVariableType<V1>::Type::Reference> T>
+RoAffineExpression operator-(VariableReference<V1> const& v, T const& t) {
+    return RoAffineExpression(v) -= t;
+}
+
+template<RobustVariableType V1, NonConstAffineConvertible<typename OtherRobustVariableType<V1>::Type::Reference> T>
+RoAffineExpression operator-(ScaledVariable<VariableReference<V1> > const& v, T const& t) {
+    return RoAffineExpression(v) -= t;
+}
+
+template<RobustVariableType V1, NonConstAffineConvertible<typename OtherRobustVariableType<V1>::Type::Reference> T>
+RoAffineExpression operator-(LinearExpression<VariableReference<V1> > const& v, T const& t) {
+    return RoAffineExpression(v) -= t;
+}
+
+template<RobustVariableType V1, NonConstAffineConvertible<typename OtherRobustVariableType<V1>::Type::Reference> T>
+RoAffineExpression operator-(AffineExpression<V1> const& v, T const& t) {
+    return RoAffineExpression(v) -= t;
+}
+
+template<RobustVariableType V1, NonConstAffineConvertible<typename OtherRobustVariableType<V1>::Type::Reference> T>
+RoAffineExpression operator*(VariableReference<V1> const& v, T const& t) {
+    AffineExpression<typename OtherRobustVariableType<V1>::Type::Reference> const expr(t);
+    RoAffineExpression ro_expr;
+    if (expr.constant() != 0) {
+        ro_expr += expr.constant() * v;
+    }
+    for (auto const& sv: expr.linear().scaled_variables()) {
+        ro_expr += ScaledVariable<UncertaintyScaledDecision>{sv.scale(),
+                                                             UncertaintyScaledDecision{v, sv.variable()}};
+    }
+    return ro_expr;
+}
+
+
+template<RobustVariableType V1, NonConstAffineConvertible<typename OtherRobustVariableType<V1>::Type::Reference> T>
+RoAffineExpression operator*(ScaledVariable<VariableReference<V1> > const& v, T const& t) {
+    return v.scale() * (v.variable() * t);
+}
+
+template<RobustVariableType V1, NonConstAffineConvertible<typename OtherRobustVariableType<V1>::Type::Reference> T>
+RoAffineExpression operator*(LinearExpression<VariableReference<V1>> const& v, T const& t) {
+    RoAffineExpression ro_expr;
+    for (auto const& sv: v.scaled_variables()) {
+        ro_expr += sv * t;
+    }
+    return ro_expr;
+}
+
+template<RobustVariableType V1, NonConstAffineConvertible<typename OtherRobustVariableType<V1>::Type::Reference> T>
+RoAffineExpression operator*(AffineExpression<VariableReference<V1>> const& v, T const& t) {
+    return v.linear() * t + ((v.constant() != 0) ? (v.constant() * t) : T());
+}
+
+template<RobustVariableType V1, NonConstAffineConvertible<typename OtherRobustVariableType<V1>::Type::Reference> T>
+RawConstraint<RoAffineExpression> operator>=(VariableReference<V1> const& v, T const& t) {
+    return v - t >= 0;
+}
+
+template<RobustVariableType V1, NonConstAffineConvertible<typename OtherRobustVariableType<V1>::Type::Reference> T>
+RawConstraint<RoAffineExpression> operator<=(VariableReference<V1> const& v, T const& t) {
+    return v - t <= 0;
+}
+
+template<RobustVariableType V1, NonConstAffineConvertible<typename OtherRobustVariableType<V1>::Type::Reference> T>
+RawConstraint<RoAffineExpression> operator==(VariableReference<V1> const& v, T const& t) {
+    return v - t == 0;
+}
+
+template<RobustVariableType V1, NonConstAffineConvertible<typename OtherRobustVariableType<V1>::Type::Reference> T>
+RawConstraint<RoAffineExpression> operator>=(ScaledVariable<VariableReference<V1> > const& v, T const& t) {
+    return v - t >= 0;
+}
+
+template<RobustVariableType V1, NonConstAffineConvertible<typename OtherRobustVariableType<V1>::Type::Reference> T>
+RawConstraint<RoAffineExpression> operator<=(ScaledVariable<VariableReference<V1> > const& v, T const& t) {
+    return v - t <= 0;
+}
+
+template<RobustVariableType V1, NonConstAffineConvertible<typename OtherRobustVariableType<V1>::Type::Reference> T>
+RawConstraint<RoAffineExpression> operator==(ScaledVariable<VariableReference<V1> > const& v,
+                                             T const& t) {
+    return v - t == 0;
+}
+
+template<RobustVariableType V1, NonConstAffineConvertible<typename OtherRobustVariableType<V1>::Type::Reference> T>
+RawConstraint<RoAffineExpression> operator>=(LinearExpression<VariableReference<V1> > const& v, T const& t) {
+    return v - t >= 0;
+}
+
+template<RobustVariableType V1, NonConstAffineConvertible<typename OtherRobustVariableType<V1>::Type::Reference> T>
+RawConstraint<RoAffineExpression> operator<=(LinearExpression<VariableReference<V1> > const& v, T const& t) {
+    return v - t <= 0;
+}
+
+template<RobustVariableType V1, NonConstAffineConvertible<typename OtherRobustVariableType<V1>::Type::Reference> T>
+RawConstraint<RoAffineExpression> operator==(LinearExpression<VariableReference<V1> > const& v, T const& t) {
+    return v - t == 0;
+}
+
+template<RobustVariableType V1, NonConstAffineConvertible<typename OtherRobustVariableType<V1>::Type::Reference> T>
+RawConstraint<RoAffineExpression> operator>=(AffineExpression<VariableReference<V1> > const& v, T const& t) {
+    return v - t >= 0;
+}
+
+template<RobustVariableType V1, NonConstAffineConvertible<typename OtherRobustVariableType<V1>::Type::Reference> T>
+RawConstraint<RoAffineExpression> operator<=(AffineExpression<VariableReference<V1> > const& v, T const& t) {
+    return v - t <= 0;
+}
+
+template<RobustVariableType V1, NonConstAffineConvertible<typename OtherRobustVariableType<V1>::Type::Reference> T>
+RawConstraint<RoAffineExpression> operator==(AffineExpression<VariableReference<V1> > const& v, T const& t) {
+    return v - t == 0;
+}
+
+}

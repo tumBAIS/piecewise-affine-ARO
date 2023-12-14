@@ -1,0 +1,48 @@
+//
+// Created by simon on 14/06/2021.
+//
+
+#include "Constraint.h"
+
+namespace robust_model {
+
+
+template<class E>
+Constraint<E>::Constraint(NativeRawConstraint
+                          raw_constraint, std::string const& name) :
+        NativeRawConstraint(std::move(raw_constraint)), _name(name) {}
+
+template<class E>
+Constraint<E>::Constraint(std::string const& name, ConstraintSense
+sense, E
+                          expression) :
+        Constraint(NativeRawConstraint(sense, expression), name) {}
+
+template<class E>
+template<ConvertibleTo<E> T>
+Constraint<E>::Constraint(RawConstraint<T>
+                          raw_constraint, std::string const& name) :
+        Constraint(name, raw_constraint.sense(), E(raw_constraint.expression())) {}
+
+template<class E>
+std::string const& Constraint<E>::name() const {
+    return _name;
+}
+
+template<class E>
+std::string Constraint<E>::to_string() const {
+    return name() + ": " + NativeRawConstraint::to_string();
+}
+
+template<class E>
+double Constraint<E>::dual_lb() const {
+    return NativeRawConstraint::sense() == ConstraintSense::LEQ ? 0 : NO_VARIABLE_LB;
+}
+
+template<class E>
+double Constraint<E>::dual_ub() const {
+    return NativeRawConstraint::sense() == ConstraintSense::GEQ ? 0 : NO_VARIABLE_UB;
+}
+
+
+}

@@ -1,0 +1,205 @@
+//
+// Created by simon on 14/06/2021.
+//
+
+#include "LinearExpression.h"
+
+namespace robust_model {
+
+template<class V>
+LinearExpression<V>::LinearExpression(std::vector<ScaledVariable<V>> const& scaled_variables):
+        _scaled_variables(scaled_variables) {}
+
+template<class V>
+LinearExpression<V>::LinearExpression(ScaledVariable<V> const& scaled_variable) :
+        LinearExpression(std::vector<ScaledVariable<V>>({scaled_variable})) {
+}
+
+template<class V>
+LinearExpression<V>::LinearExpression(V const variable): LinearExpression({1, variable}) {}
+
+template<class V>
+robust_model::LinearExpression<V>& robust_model::LinearExpression<V>::operator*=(double scale) {
+    for (auto& svar: _scaled_variables) {
+        svar *= scale;
+    }
+    return *this;
+}
+
+template<class V>
+robust_model::LinearExpression<V>& robust_model::LinearExpression<V>::operator/=(double scale) {
+    return *this *= (1. / scale);
+}
+
+template<class V>
+robust_model::LinearExpression<V> robust_model::LinearExpression<V>::operator*(double scale) const {
+    return LinearExpression<V>(*this) *= scale;
+}
+
+template<class V>
+robust_model::LinearExpression<V> robust_model::LinearExpression<V>::operator/(double scale) const {
+    return LinearExpression<V>(*this) /= scale;
+}
+
+template<class V>
+LinearExpression<V>&
+LinearExpression<V>::operator+=(LinearExpression<V> const& other) {
+    _scaled_variables.insert(_scaled_variables.end(),
+                             other.scaled_variables().begin(),
+                             other.scaled_variables().end());
+    return *this;
+}
+
+template<class V>
+LinearExpression<V>&
+LinearExpression<V>::operator+=(ScaledVariable<V> const& svar) {
+    _scaled_variables.emplace_back(svar);
+    return *this;
+}
+
+template<class V>
+LinearExpression<V>&
+LinearExpression<V>::operator+=(V const& var) {
+    return *this += ScaledVariable<V>(var);
+}
+
+template<class V>
+template<LinearSubtractable<V> T>
+LinearExpression<V>& LinearExpression<V>::operator-=(T const& other) {
+    return *this += -other;
+}
+
+
+template<class V>
+LinearExpression<V> LinearExpression<V>::operator-() const {
+    LinearExpression<V> new_expr;
+    for (auto const& svar: scaled_variables()) {
+        new_expr += {-svar.scale(), svar.variable()};
+    }
+    return new_expr;
+}
+
+template<class V>
+template<LinearAddable<V> T>
+LinearExpression<V> LinearExpression<V>::operator+(T const& other) const {
+    return LinearExpression<V>(*this) += other;
+}
+
+template<class V>
+template<SolelyAffineAddable<V> T>
+AffineExpression<V> LinearExpression<V>::operator+(T const& other) const {
+    return AffineExpression<V>(*this) += other;
+}
+
+template<class V>
+template<LinearSubtractable<V> T>
+LinearExpression<V> LinearExpression<V>::operator-(T const& other) const {
+    return LinearExpression<V>(*this) -= other;
+}
+
+template<class V>
+template<SolelyAffineSubtractable<V> T>
+AffineExpression<V> LinearExpression<V>::operator-(T const& other) const {
+    return AffineExpression<V>(*this) -= other;
+}
+
+template<class V>
+template<AffineSubtractable<V> T>
+RawConstraint<AffineExpression<V>> LinearExpression<V>::operator>=(T const& other) const {
+    return AffineExpression<V>(*this) >= other;
+}
+
+template<class V>
+template<AffineSubtractable<V> T>
+RawConstraint<AffineExpression<V>> LinearExpression<V>::operator<=(T const& other) const {
+    return AffineExpression<V>(*this) <= other;
+}
+
+template<class V>
+template<AffineSubtractable<V> T>
+RawConstraint<AffineExpression<V>> LinearExpression<V>::operator==(T const& other) const {
+    return AffineExpression<V>(*this) == other;
+}
+
+template<class V>
+template<class W>
+robust_model::LinearExpression<W>
+robust_model::LinearExpression<V>::translate_to_other(std::vector<W> const& new_vars) const {
+    LinearExpression<W> other;
+    for (auto const& svar: scaled_variables()) {
+        other += svar.scale() * new_vars.at(svar.variable().raw_id());
+    }
+    return other;
+}
+
+template<class V>
+template<class W, AffineAddable<W> T>
+AffineExpression<W> LinearExpression<V>::substitute(std::vector<T> const& substitutions) const {
+    AffineExpression<W> other;
+    for (auto const& svar: scaled_variables()) {
+        other += svar.scale() * substitutions.at(svar.variable().raw_id());
+    }
+    return other;
+}
+
+template<class V>
+std::vector<ScaledVariable<V>> const&
+LinearExpression<V>::scaled_variables() const {
+    return _scaled_variables;
+}
+
+template<class V>
+bool LinearExpression<V>::empty() const {
+    return scaled_variables().empty();
+}
+
+template<class V>
+std::string LinearExpression<V>::to_string() const {
+    std::string s{""};
+    for (auto const& sv: scaled_variables()) {
+        s += (s.empty() or sv.scale() == 0) ? "" : " + ";
+        s += sv.to_string();
+    }
+    return s;
+}
+
+template<class V>
+template<class Iter>
+LinearExpression<V> LinearExpression<V>::sum(Iter const& iter) {
+    LinearExpression<V> s;
+    for (auto const& item: iter) {
+        s += item;
+    }
+    return s;
+}
+
+template<class V>
+template<class S>
+double LinearExpression<V>::value(S const& solution) const {
+    double val = 0;
+    for (auto const& sv: scaled_variables()) {
+        val += sv.value(solution);
+    }
+    return val;
+}
+
+template<class V>
+double robust_model::LinearExpression<V>::lb() const {
+    double val = 0;
+    for (auto const& sv: scaled_variables()) {
+        val += sv.lb();
+    }
+    return val;
+}
+
+template<class V>
+double robust_model::LinearExpression<V>::ub() const {
+    double val = 0;
+    for (auto const& sv: scaled_variables()) {
+        val += sv.ub();
+    }
+    return val;
+}
+
+
+}

@@ -1,0 +1,177 @@
+//
+// Created by simon on 14/06/2021.
+//
+
+#include "AffineExpression.h"
+
+namespace robust_model {
+
+template<class V>
+AffineExpression<V>::AffineExpression(double constant, LinearExpression<V> const& linear) :
+        _constant(constant),
+        _linear(linear) {}
+
+template<class V>
+AffineExpression<V>::AffineExpression(double constant):
+        AffineExpression(constant,
+                         LinearExpression<V>{}) {}
+
+template<class V>
+template<ConvertibleTo<LinearExpression<V>> T>
+AffineExpression<V>::AffineExpression(T const& expr) :
+        AffineExpression(0, LinearExpression<V>{expr}) {}
+
+template<class V>
+AffineExpression<V>& AffineExpression<V>::operator*=(double scale) {
+    _linear *= scale;
+    _constant *= scale;
+    return *this;
+}
+
+template<class V>
+AffineExpression<V>& AffineExpression<V>::operator/=(double scale) {
+    return *this *= (1. / scale);
+}
+
+template<class V>
+AffineExpression<V> AffineExpression<V>::operator*(double scale) const {
+    return AffineExpression(*this) *= scale;
+}
+
+template<class V>
+AffineExpression<V> AffineExpression<V>::operator/(double scale) const {
+    return AffineExpression(*this) /= scale;
+}
+
+template<class V>
+AffineExpression<V>& AffineExpression<V>::operator+=(AffineExpression<V> const& other) {
+    _constant += other.constant();
+    _linear += other.linear();
+    return *this;
+}
+
+template<class V>
+AffineExpression<V>&
+AffineExpression<V>::operator+=(LinearExpression<V> const& linear) {
+    _linear += linear;
+    return *this;
+}
+
+template<class V>
+AffineExpression<V>&
+AffineExpression<V>::operator+=(ScaledVariable<V> const& svar) {
+    _linear += svar;
+    return *this;
+}
+
+
+template<class V>
+AffineExpression<V>&
+AffineExpression<V>::operator+=(V const& var) {
+    _linear += var;
+    return *this;
+}
+
+template<class V>
+AffineExpression<V>& AffineExpression<V>::operator+=(double constant) {
+    _constant += constant;
+    return *this;
+}
+
+template<class V>
+template<AffineSubtractable<V> T>
+AffineExpression<V>& AffineExpression<V>::operator-=(T const& other) {
+    return *this += -other;
+}
+
+template<class V>
+AffineExpression<V> AffineExpression<V>::operator-() const {
+    return AffineExpression<V>(-constant(), -linear());
+}
+
+template<class V>
+template<AffineAddable<V> T>
+AffineExpression<V> AffineExpression<V>::operator+(T const& other) const {
+    return AffineExpression<V>(*this) += other;
+}
+
+template<class V>
+template<AffineSubtractable<V> T>
+AffineExpression<V> AffineExpression<V>::operator-(T const& other) const {
+    return AffineExpression<V>(*this) -= other;
+}
+
+template<class V>
+template<AffineSubtractable<V> T>
+RawConstraint<AffineExpression<V>>
+AffineExpression<V>::operator>=(T const& other) const {
+    return RawConstraint<AffineExpression<V >>(
+            ConstraintSense::GEQ,
+            *this - other);
+}
+
+template<class V>
+template<AffineSubtractable<V> T>
+RawConstraint<AffineExpression<V>>
+AffineExpression<V>::operator<=(T const& other) const {
+    return RawConstraint<AffineExpression<V >>(
+            ConstraintSense::LEQ,
+            *this - other);
+}
+
+template<class V>
+template<AffineSubtractable<V> T>
+RawConstraint<AffineExpression<V>>
+AffineExpression<V>::operator==(T const& other) const {
+    return RawConstraint<AffineExpression<V >>(
+            ConstraintSense::EQ,
+            *this - other);
+}
+
+template<class V>
+template<class W>
+AffineExpression<W> AffineExpression<V>::translate_to_other(std::vector<W>
+                                                            const& new_vars) const {
+    return linear().translate_to_other(new_vars) + constant();
+}
+
+template<class V>
+template<class W, AffineAddable<W> T>
+AffineExpression<W> AffineExpression<V>::substitute(std::vector<T> const& substitutions) const {
+    return linear().template substitute<W>(substitutions) + constant();
+}
+
+template<class V>
+double AffineExpression<V>::constant() const {
+    return _constant;
+}
+
+template<class V>
+LinearExpression<V> const& AffineExpression<V>::linear() const {
+    return _linear;
+}
+
+template<class V>
+std::string AffineExpression<V>::to_string() const {
+    return ((linear().empty() or constant() != 0) ? std::to_string(constant()) : "")
+           + ((linear().empty() or constant() == 0) ? "" : " + ")
+           + linear().to_string();
+}
+
+template<class V>
+template<class S>
+double AffineExpression<V>::value(S const& solution) const {
+    return linear().value(solution) + constant();
+}
+
+template<class V>
+double AffineExpression<V>::lb() const {
+    return linear().lb() + constant();
+}
+
+template<class V>
+double AffineExpression<V>::ub() const {
+    return linear().ub() + constant();
+}
+
+}

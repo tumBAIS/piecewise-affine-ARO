@@ -1,0 +1,124 @@
+//
+// Created by simon on 14/06/2021.
+//
+
+#include "ScaledVariable.h"
+
+
+namespace robust_model {
+
+template<class V>
+ScaledVariable<V>::ScaledVariable(double scale, V const& variable):
+        _scale(scale),
+        _variable(variable) {}
+
+template<class V>
+ScaledVariable<V>::ScaledVariable(V const& variable): ScaledVariable(1, variable) {}
+
+template<class V>
+ScaledVariable <V>& ScaledVariable<V>::operator*=(double const scale) {
+    _scale *= scale;
+    return *this;
+}
+
+template<class V>
+ScaledVariable <V>& ScaledVariable<V>::operator/=(double const scale) {
+    return *this *= (1. / scale);
+}
+
+template<class V>
+ScaledVariable <V> ScaledVariable<V>::operator*(double const scale) const {
+    return ScaledVariable(*this) *= scale;
+}
+
+template<class V>
+ScaledVariable <V> ScaledVariable<V>::operator/(double const scale) const {
+    return ScaledVariable(*this) /= scale;
+}
+
+template<class V>
+ScaledVariable <V> ScaledVariable<V>::operator-() const {
+    return ScaledVariable(-scale(), variable());
+}
+
+template<class V>
+template<LinearAddable <V> T>
+LinearExpression <V> ScaledVariable<V>::operator+(T const& other) const {
+    return LinearExpression<V>(*this) += other;
+}
+
+template<class V>
+template<SolelyAffineAddable <V> T>
+AffineExpression <V> ScaledVariable<V>::operator+(T const& other) const {
+    return AffineExpression<V>(*this) += other;
+}
+
+template<class V>
+template<LinearSubtractable <V> T>
+LinearExpression <V> ScaledVariable<V>::operator-(T const& other) const {
+    return LinearExpression<V>(*this) -= other;
+}
+
+template<class V>
+template<SolelyAffineSubtractable <V> T>
+AffineExpression <V> ScaledVariable<V>::operator-(T const& other) const {
+    return AffineExpression<V>(*this) -= other;
+}
+
+template<class V>
+template<AffineSubtractable <V> T>
+RawConstraint <AffineExpression<V>> ScaledVariable<V>::operator>=(T const& other) const {
+    return AffineExpression<V>(*this) >= other;
+}
+
+template<class V>
+template<AffineSubtractable <V> T>
+RawConstraint <AffineExpression<V>> ScaledVariable<V>::operator<=(T const& other) const {
+    return AffineExpression<V>(*this) <= other;
+}
+
+template<class V>
+template<AffineSubtractable <V> T>
+RawConstraint <AffineExpression<V>> ScaledVariable<V>::operator==(T const& other) const {
+    return AffineExpression<V>(*this) == other;
+}
+
+template<class V>
+double ScaledVariable<V>::scale() const {
+    return _scale;
+}
+
+template<class V>
+V const& ScaledVariable<V>::variable() const {
+    return _variable;
+}
+
+template<class V>
+std::string ScaledVariable<V>::to_string() const {
+    if (scale() == 0)
+        return "";
+    if (scale() == 1)
+        return variable().to_string();
+    return std::to_string(scale()) + "*" + variable().to_string();
+}
+
+template<class V>
+template<class S>
+double ScaledVariable<V>::value(S const& solution) const{
+    return scale()*variable().value(solution);
+}
+
+template<class V>
+double ScaledVariable<V>::lb() const {
+    return (scale()>=0)?
+         scale()*variable().lb():
+         scale()*variable().ub();
+}
+
+template<class V>
+double ScaledVariable<V>::ub() const {
+    return (scale()>=0)?
+           scale()*variable().ub():
+           scale()*variable().lb();}
+
+}

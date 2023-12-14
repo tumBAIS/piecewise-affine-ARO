@@ -1,0 +1,108 @@
+#include "helpers.h"
+
+namespace helpers {
+
+template<class ObjT>
+std::size_t IndexedObjectOwner<ObjT>::num_objects() const {
+    return _objects.size();
+}
+
+template<class ObjT>
+template<class... Args>
+SmartIndex <ObjT> IndexedObjectOwner<ObjT>::base_add_object(Args&& ... args) {
+    return _ids.emplace_back(
+            _objects.emplace_back(next_id(), std::forward<Args>(args)...).id()
+    );
+}
+
+template<class ObjT>
+ObjT const& IndexedObjectOwner<ObjT>::object(IdT id) const {
+    exception_check(&id.owner() == this, "Wrong _id access!");
+    return _objects.at(size_t(id));
+}
+
+template<class ObjT>
+ObjT& IndexedObjectOwner<ObjT>::object(IndexedObjectOwner::IdT id) {
+    exception_check(&id.owner() == this, "Wrong _id access!");
+    return _objects.at(size_t(id));
+}
+
+template<class ObjT>
+void IndexedObjectOwner<ObjT>::clear() {
+    _ids.clear();
+    _objects.clear();
+}
+
+template<class ObjT>
+SmartIndex <ObjT> IndexedObjectOwner<ObjT>::next_id() const {
+    return IdT(_objects.size(), this);
+}
+
+template<class ObjT>
+std::vector<typename IndexedObjectOwner<ObjT>::IdT> const& IndexedObjectOwner<ObjT>::ids() const {
+    return _ids;
+}
+
+template<class ObjT>
+std::vector<ObjT> const& IndexedObjectOwner<ObjT>::objects() const {
+    return _objects;
+}
+
+template<class ObjT>
+std::vector<ObjT> & IndexedObjectOwner<ObjT>::non_const_objects() {
+    return _objects;
+}
+
+template<class ObjT>
+SmartIndex<ObjT>::SmartIndex(size_t const id, Owner const* owner) : _id(id), _owner(owner) {}
+
+template<class ObjT>
+typename SmartIndex<ObjT>::Owner const& SmartIndex<ObjT>::owner() const {
+    return *_owner;
+}
+
+template<class ObjT>
+ObjT const* SmartIndex<ObjT>::operator->() const {
+    return &owner().object(*this);
+}
+
+template<class ObjT>
+auto SmartIndex<ObjT>::operator==(SmartIndex<ObjT> const& other) const {
+    exception_check(this->_owner == other._owner, "Ids not from same Owner!");
+    return size_t(*this) == size_t(other);
+}
+
+template<class ObjT>
+auto SmartIndex<ObjT>::operator!=(SmartIndex<ObjT> const& other) const {
+    exception_check(this->_owner == other._owner, "Ids not from same Owner!");
+    return size_t(*this) != size_t(other);
+}
+
+template<class ObjT>
+auto SmartIndex<ObjT>::operator<=>(SmartIndex <ObjT> const& other) const {
+    exception_check(this->_owner == other._owner, "Ids not from same Owner!");
+    return size_t(*this) <=> size_t(other);
+}
+
+template<class ObjT>
+SmartIndex<ObjT>::operator size_t() const {
+    return _id;
+}
+
+template<class ObjT>
+size_t SmartIndex<ObjT>::raw_id() const {
+    return _id;
+}
+
+template<class ObjT>
+IndexedObject<ObjT>::IndexedObject(SmartIndex <ObjT> id) : _id(id) {
+
+}
+
+template<class ObjT>
+SmartIndex <ObjT> const& IndexedObject<ObjT>::id() const {
+    return _id;
+}
+
+
+}

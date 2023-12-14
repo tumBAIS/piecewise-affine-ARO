@@ -1,0 +1,144 @@
+//
+// Created by simon on 18/06/2021.
+//
+
+#include "NormedAffineVector.h"
+
+namespace robust_model {
+
+template<class V>
+NormedAffineVector<V>::NormedAffineVector(VectorNormType norm_type,
+                                          std::vector<AffineExpression<typename V::Reference>> const& normed_vector) :
+        _norm_type(norm_type), _normed_vector(normed_vector) {}
+
+template<class V>
+VectorNormType NormedAffineVector<V>::norm_type() const {
+    return _norm_type;
+}
+
+template<class V>
+std::vector<AffineExpression<typename V::Reference>> const& NormedAffineVector<V>::normed_vector() const {
+    return _normed_vector;
+}
+
+template<class V>
+std::string NormedAffineVector<V>::to_string() const {
+    std::string s;
+    s += type_string(norm_type()) + "Norm(";
+    for (auto const& affine: normed_vector()) {
+        s += affine.to_string() + ", ";
+    }
+    s.erase(s.size() - 2, 2);
+    s += ")";
+    return s;
+}
+
+template<class V>
+template<class W>
+NormedAffineVector<W>
+NormedAffineVector<V>::translate_to_other(std::vector<VariableReference<W> > const& new_vars) const {
+    std::vector<AffineExpression<typename W::Reference>> new_normed_vector;
+    for (auto const& affine: normed_vector()) {
+        new_normed_vector.emplace_back(affine.translate_to_other(new_vars));
+    }
+    return NormedAffineVector<W>(norm_type(), new_normed_vector);
+}
+
+template<class V>
+template<class W, AffineAddable<typename W::Reference> T>
+NormedAffineVector<W> NormedAffineVector<V>::substitute(std::vector<T> const& substitutions) const {
+    std::vector<AffineExpression<typename W::Reference>> new_normed_vector;
+    for (auto const& affine: normed_vector()) {
+        new_normed_vector.emplace_back(affine.template substitute<typename W::Reference>(substitutions));
+    }
+    return NormedAffineVector<W>(norm_type(), new_normed_vector);
+}
+
+template<class V>
+template<NonConstAffineConvertible<typename V::Reference> E>
+NormedAffineVector<V> NormedAffineVector<V>::norm(std::vector<E> const& normed_vector, VectorNormType norm_type) {
+    std::vector<AffineExpression<V>> affine_vector;
+    for (auto const& e: normed_vector) {
+        affine_vector.emplace_back(e);
+    }
+    return NormedAffineVector<V>(norm_type, affine_vector);
+}
+
+template<class V>
+template<class S>
+double NormedAffineVector<V>::value(S const& solution) const {
+    std::vector<double> vector_values;
+    for (auto const& affine: normed_vector()) {
+        vector_values.emplace_back(affine.value(solution));
+    }
+    return accumulated_vector_values(vector_values);
+}
+
+template<class V>
+double robust_model::NormedAffineVector<V>::lb() const {
+    std::vector<double> vector_values;
+    for (auto const& affine: normed_vector()) {
+        vector_values.emplace_back(affine.lb());
+    }
+    return accumulated_vector_values(vector_values);
+}
+
+template<class V>
+double robust_model::NormedAffineVector<V>::ub() const {
+    std::vector<double> vector_values;
+    for (auto const& affine: normed_vector()) {
+        vector_values.emplace_back(affine.ub());
+    }
+    return accumulated_vector_values(vector_values);
+}
+
+template<class V>
+double robust_model::NormedAffineVector<V>::accumulated_vector_values(std::vector<double> const& values) const {
+    switch (norm_type()) {
+        case VectorNormType::One: {
+            return std::accumulate(values.begin(), values.end(), 0.);
+        }
+        case VectorNormType::Two: {
+            return std::accumulate(values.begin(), values.end(), 0.,
+                                   [](double acc, double new_elt) { return acc + new_elt * new_elt; });
+        }
+        case VectorNormType::Max: {
+            return std::accumulate(values.begin(), values.end(), 0.,
+                                   [](double acc, double new_elt) { return std::max(acc, new_elt); });
+        }
+    }
+    helpers::exception_check(false, "Illegal Case!");
+    return 0;
+}
+
+template<class V>
+NormedAffineVector<V>
+NormedAffineVector<V>::norm(std::vector<AffineExpression<typename V::Reference>> const& normed_vector,
+                            VectorNormType norm_type) {
+    return NormedAffineVector<V>(norm_type, normed_vector);
+}
+
+template<class V>
+template<class W>
+requires requires(W w) {
+    { w->id()} -> std::same_as<typename V::Index const&>;
+}
+bool NormedAffineVector<V>::is_variable_vector_norm(std::vector<W> const& variables) const {
+    if (normed_vector().size() != variables.size())
+        return false;
+    for (size_t i = 0; i < normed_vector().size(); ++i) {
+        auto const& aff = normed_vector().at(i);
+        auto const& var = variables.at(i);
+        if (aff.constant() != 0)
+            return false;
+        if (aff.linear().scaled_variables().size() != 1)
+            return false;
+        if (aff.linear().scaled_variables().front().scale() != 1)
+            return false;
+        if (aff.linear().scaled_variables().front().variable()->id() != var->id())
+            return false;
+    }
+    return true;
+}
+
+}
