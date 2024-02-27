@@ -3,9 +3,9 @@
 This repository implements multiple piecewise affine policies in the context of adjustable robust optimization.
 It provides all relevant code to reproduce the numerical results presented in the paper.
 
-> Simon Thomä, Grit Walther, Maximilian Schiffer.
-> "Designing Tractable Piecewise Affine Policies for Multi-Stage Adjustable Robust Optimization."
-> arXiv preprint: [arXiv:2207.00403](https://arxiv.org/abs/2207.00403), 2023.
+> Simon Thomä, Grit Walther, Maximilian Schiffer. (2024).
+> Designing Tractable Piecewise Affine Policies for Multi-Stage Adjustable Robust Optimization.
+> *Mathematical Programming*. [https://doi.org/10.1007/s10107-023-02053-0](https://doi.org/10.1007/s10107-023-02053-0)
 
 While most of the code is aimed to be applicable to general robust optimization problems,
 some of the solvers only implement the special cases needed for the numerical experiments yet.
@@ -79,9 +79,9 @@ For more information on the MIT License, please visit [Open Source Initiative](h
 ## Citing This Work
 
 If you use this code in your work, please cite the accompanying paper:
-> Simon Thomä, Grit Walther, Maximilian Schiffer.
-> "Designing Tractable Piecewise Affine Policies for Multi-Stage Adjustable Robust Optimization."
-> arXiv preprint: [arXiv:2207.00403](https://arxiv.org/abs/2207.00403), 2023.
+> Simon Thomä, Grit Walther, Maximilian Schiffer. (2024).
+> Designing Tractable Piecewise Affine Policies for Multi-Stage Adjustable Robust Optimization.
+> *Mathematical Programming*. [https://doi.org/10.1007/s10107-023-02053-0](https://doi.org/10.1007/s10107-023-02053-0)
 
 ## Contact Information
 
